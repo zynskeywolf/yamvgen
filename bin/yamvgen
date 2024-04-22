@@ -1,0 +1,162 @@
+#!/bin/bash
+
+showHelp(){ echo "Usage: yamvgen COMMAND [PROFILE] [OPTIONS]
+
+COMMAND:
+
+	help        Display this help and exit.
+	cover       Bake an image from the specified overlay template and background.
+	vid         Generate a video from the specified audio and background image.
+
+PROFILE:
+
+	Specifies a custom configuration file to use. If omitted, defaulting to '$PROFILE'.
+	You can still override any of the options with further command line arguments.
+
+OPTIONS:
+
+	-a          Input audio file. The stream is copied to the output video file without any conversions.
+	            Metadata from this file is used if '-artist' or '-title' is omitted.
+	-o          Name of the output file. The format is implicitly set by the file extension.
+	            If omitted, generating file name from the specified metadata.
+	-i          SVG image containing the overlay template. If omitted, using the background image as is.
+	-bg         Background image on which everything else is overlaid. If omitted, defaulting to '$BG'.
+	            If '-i' is specified, this file is inserted in the template at '\$bg'.
+	-artist     Artist name to be displayed. Use the '\$artist' variable in the SVG.
+	-title      Track title to be displayed. Use the '\$title' variable in the SVG.
+
+Video options:
+
+	-c          Video codec for the output video. This parameter is passed directly to ffmpeg. Default is '$C'.
+	-b          Bitrate of the output video stream. This parameter is passed directly to ffmpeg. Default is '$B'.
+	-r          Frame rate of the output video. Default is '$R'.
+	            The higher the frame rate, the more stretched the waveform will be in order to stay in sync.
+	-fin        Length of fade in at the beginning in seconds. Default is '$FIN'.
+	-fout       Length of fade out at the end. If not specified, using the '-fin' value.
+	-keeptmp    Keep temporary files in /tmp after execution, mostly for debugging.
+
+Visualizer options:
+
+	-wmask      Specifies a (preferably grayscale) image to be applied to the waveform as an alpha mask.
+	            The size of this image sets the size of the waveform at maximum amplitude.
+	            If omitted, no waveform is rendered.
+	-wx         X position of the waveform's left edge. Default is '$WX'.
+	-wy         Y position of the waveform's zero level. If omitted, the waveform will be vertically centered.
+	-wblur      Make the waveform more visible on high resoultions by doing trickery.
+
+Full documentation is available at /usr/share/doc/yamvgen or https://zynskeywolf.github.io/yamvgen.";}
+
+renderImg(){
+[ -z "$I" ] && I=/usr/share/yamvgen/cover-default.svg
+if [ ! -f "$I" ];then echo -e "\e[31mCannot open SVG template $I\e[0m" >&2;exit 1;fi
+
+# Decide where to output
+if [ -n "$1" ];then IMGCMP=$1
+elif [ -n "$O" ];then IMGCMP=$O
+else IMGCMP=$FNAME.png;fi
+if [ -f "$IMGCMP" ];then
+read -p "File '$IMGCMP' already exists. Overwrite? [y/N] "
+[[ ! $REPLY = [Yy] ]] && exit 1;
+fi
+
+echo -n Rendering image...
+sed -e "s|\$bg|$BG|" -e "s/\$artist/$ARTIST/" -e "s/\$title/$TITLE/" $I | inkscape -p -o "$IMGCMP"
+echo done
+}
+
+cmdVid(){
+if [ -z "$A" ];then echo -e "\e[31mAudio file not specified.\e[0m" >&2;exit 1;fi
+if [ -n "$WMASK" ] && [ ! -f "$WMASK" ];then echo -e "\e[31mCannot open alpha mask $WMASK\e[0m" >&2;exit 1;fi
+
+DURATION=$(ffprobe -v quiet -show_entries stream=duration -of default=nw=1:nk=1 "$A" | head -n1)
+[ -z "$FOUT" ] && FOUT=$FIN
+if [ ! $FIN == 0 ];then FIN="fade=st=0:d=$FIN";else FIN=null;fi
+if [ ! $FOUT == 0 ];then
+FOUTSTART=$(printf '%.6f' $(bc <<< $DURATION-$FOUT))
+if [[ $FOUTSTART == -* ]];then echo -e "\e[31mERROR: Fade out longer than the video itself.\e[0m" >&2;exit 1;fi
+FOUT="fade=t=out:st=$FOUTSTART:d=$FOUT";else FOUT=null;fi
+
+# Render background if needed
+if [ -n "$I" ];then
+renderImg /tmp/yamvgen-bg.png
+BG=/tmp/yamvgen-bg.png;fi
+
+[ -z "$O" ] && O=$FNAME.mkv
+echo "Outputting to '$O'"
+FFCMD="ffmpeg -hide_banner -loglevel warning -stats -i"
+FFOUTPUT=" -map [outv] -map 0:a -c:v $C -c:a copy -t $DURATION -b:v $B $O"
+
+# Render with waveform
+if [ -n "$WMASK" ];then
+WWIDTH=$(ffprobe -v quiet -of default=nk=1:nw=1 -show_entries stream=width "$WMASK")
+WHEIGHT=$(ffprobe -v quiet -of default=nk=1:nw=1 -show_entries stream=height "$WMASK")
+[ -z "$WY" ] && WY=$(($(ffprobe -v quiet -of default=nk=1:nw=1 -show_entries stream=height "$BG")/2)) # Center vertically if WY is not specified
+WY=$(($WY-$WHEIGHT/2)) # Align actual zero level instead of top edge
+[ -n "$WBLUR" ] && WBLUR=",boxblur=lr=1,eq=brightness=6:contrast=4"
+
+$FFCMD "$A" -framerate $R -i "$BG" -framerate $R -i "$WMASK" -filter_complex "[0:a]aresample=$(($WWIDTH*$R)),
+showwaves=s='$WWIDTH'x'$WHEIGHT':rate=$R:mode=p2p:draw=full:colors=white$WBLUR,
+split[wave0][wave1],[2:v][wave0]blend=all_mode=multiply[amask],[wave1][amask]alphamerge[wfinal],
+[1:v][wfinal]overlay=x='$WX':y='$WY':format=rgb,$FIN,$FOUT[outv]"$FFOUTPUT
+
+# Render with static image
+else $FFCMD "$A" -framerate $R -loop 1 -i "$BG" -filter_complex "[1:v]$FIN,$FOUT[outv]"$FFOUTPUT;fi
+}
+
+# Entry point
+if [ -z $1 ];then echo -e "Usage: yamvgen COMMAND [PROFILE] [OPTIONS]\nRun 'yamvgen help' to display help.";exit 1;fi
+PROFILE=/etc/yamvgen/vid-default.conf;BG=/usr/share/yamvgen/bg.png;C=h264;B=1M;R=15;FIN=0;WX=0
+case $1 in
+help) showHelp;exit 0;;
+cover) CMD=renderImg;;
+vid) CMD=cmdVid;;
+*) echo "Invalid command: $1. Run 'yamvgen help' to display help.";exit 1;;
+esac;shift
+
+# Load settings
+if [ -n "$1" ] && [[ ! "$1" = -* ]];then PROFILE="$1";shift;fi
+echo "Loading profile $PROFILE"
+if [ ! -f "$PROFILE" ];then echo -e "\e[31mCannot open profile.\e[0m" >&2;exit 1;fi
+source "$PROFILE";
+while [[ $# -gt 0 ]];do case $1 in
+-a) A="$2";shift;;
+-o) O="$2";shift;;
+-i) I="$2";shift;;
+-bg) BG="$2";shift;;
+-artist) ARTIST="$2";shift;;
+-title) TITLE="$2";shift;;
+-c) C="$2";shift;;
+-b) B="$2";shift;;
+-r) R="$2";shift;;
+-fin) FIN="$2";shift;;
+-fout) FOUT="$2";shift;;
+-keeptmp) KEEPTMP=1;;
+-wmask) WMASK="$2";shift;;
+-wx) WX="$2";shift;;
+-wy) WY="$2";shift;;
+-wblur) WBLUR=1;;
+*) echo "Invalid option: $1. Run 'yamvgen help' to display help.";exit 1;;
+esac;shift;done;set -e
+
+# Sanitize
+if [ -n "$A" ] && [ ! -f "$A" ];then echo -e "\e[31mCannot open audio file $A\e[0m" >&2;exit 1;fi
+BG=`readlink -m "$BG"`
+if [ ! -f "$BG" ];then echo -e "\e[31mCannot open image $BG\e[0m" >&2;exit 1;fi
+
+# Read metadata
+if [ -n "$A" ];then
+echo -n Reading metadata
+[ -z "$ARTIST" ] && ARTIST=$(ffprobe -v quiet -show_entries format_tags=artist -of default=nk=1:nw=1 "$A") || true
+echo -n ...
+[ -z "$TITLE" ] && TITLE=$(ffprobe -v quiet -show_entries format_tags=title -of default=nk=1:nw=1 "$A") || true
+[ -z "$TITLE" ] && TITLE=$(basename "${A%.*}")
+echo done;fi
+
+# Sanitize strings
+ARTIST=$(echo "$ARTIST" | sed -e 's/\\/\\\\/g' -e 's/\//\\\//g' -e 's/&/\\&amp;/g' -e 's/</\\\&lt;/g' -e 's/>/\\\&gt;/g')
+TITLE=$(echo "$TITLE" | sed -e 's/\\/\\\\/g' -e 's/\//\\\//g' -e 's/&/\\&amp;/g' -e 's/</\\\&lt;/g' -e 's/>/\\\&gt;/g')
+if [ -n "$TITLE" ];then FNAME=$(echo $TITLE | tr -dc '[:alnum:]' | tr '[:upper:]' '[:lower:]')
+else FNAME=yamvgen;fi
+
+$CMD
+[ -z $KEEPTMP ] && rm -f /tmp/yamvgen*

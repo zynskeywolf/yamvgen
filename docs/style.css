@@ -1,0 +1,45 @@
+body {
+background-color:abc;
+text-align:justify;
+font-family:sans;
+font-size:16;
+}
+
+#header {
+text-align:center;
+}
+
+#container {
+margin-left:auto;
+margin-right:auto;
+max-width:1024px;
+box-shadow: 0px 0px 16px #777;
+background-color:fff;
+padding:24px;
+}
+
+h2 {
+padding:8px;
+background-color:ddd;
+}
+
+code {
+background-color:ddd;
+padding:1px 3px;
+font-size:16px;
+}
+
+table {
+width:100%;
+border-collapse:collapse;
+}
+
+th,td {
+border:1px solid black;
+padding:4px;
+text-align:left;
+}
+
+.narrow {
+width:192px;
+}

@@ -1,0 +1,11 @@
+<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+<image width="1920" height="1080" href="$bg"/>
+<g fill-opacity=".5">
+<rect width="1920" height="254"/>
+<rect y="840" width="1920" height="240"/>
+</g>
+<g fill="#ffffff" font-family="sans" dominant-baseline="middle">
+<text x="60" y="138" font-size="128px">$artist</text>
+<text x="60" y="972" font-size="128px">$title</text>
+</g>
+</svg>
