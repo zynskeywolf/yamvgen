@@ -37,10 +37,10 @@
 <table>
 <tr><th class="narrow">Option</th><th>Description</th></tr>
 <tr><td><code>-a</code></td><td>Input audio file. The stream is copied to the output video file without any conversions. Metadata from this file is used if '-artist' or '-title' is omitted.</td></tr>
-<tr><td><code>-o</code></td><td>Name of the output image file. The format is implicitly set by the file extension. If omitted, generating file name from the specified metadata.</td></tr>
+<tr><td><code>-o</code></td><td>Name of the output image or video file. The format is implicitly set by the file extension. If omitted, generating file name from the specified metadata.</td></tr>
 <tr><td><code>-i</code></td><td>SVG image containing the overlay template. The appropriate placeholder strings will be replaced with the specified values by the program. If omitted, using the background image as is.</td></tr>
 <tr><td><code>-bg</code></td><td>Background image on which everything else is overlaid. Please note that the program does NOT do any compositing by itself, so the placeholder must be correctly referenced within the SVG.</td></tr>
-<tr><td><code>-artist</code>, <code>-title</code></td><td>Override artist name and title to be displayed. Use the '\$artist' and '\$title' variables in the SVG.</td></tr>
+<tr><td><code>-artist</code>, <code>-title</code></td><td>Override artist name and title to be displayed. Use the <code>$artist</code> and <code>$title</code> variables in the SVG.</td></tr>
 </table>
 
 <h4>Video</h4>
@@ -48,15 +48,15 @@
 <tr><th class="narrow">Option</th><th>Description</th></tr>
 <tr><td><code>-c</code>, <code>-b</code>, <code>-r</code></td><td>Codec, bitrate, and frame rate of the output video. These parameters are passed directly to ffmpeg.</td></tr>
 <tr><td><code>-fin</code>, <code>-fout</code></td><td>Length of fade-in and fade-out at the beginning and the end of the video in seconds. If only <code>-fin</code> is specified, using it for both fade-in and fade-out.</td></tr>
-<tr><td><code>-keeptmp</code></td><td>Keep temporary files in /tmp after execution, mostly for debugging.</td></tr>
+<tr><td><code>-keeptmp</code></td><td>Keep temporary files in <code>/tmp/</code> after execution, mostly for debugging.</td></tr>
 </table>
 
 <h4>Visualizer</h4>
 <table>
 <tr><th class="narrow">Option</th><th>Description</th></tr>
 <tr><td><code>-wmask</code></td><td>Specifies a (preferably grayscale) image to be applied to the waveform as an alpha mask. The size of this image sets the size of the waveform display at maximum amplitude. Although color images are accepted, they will be treated as grayscale. If omitted, no waveform is rendered.</td></tr>
-<tr><td><code>-wx</code></td><td>X position of the waveform display's left edge.</td></tr>
-<tr><td><code>-wy</code></td><td>Y position of the waveform display's zero level. If omitted, the waveform will be vertically centered.</td></tr>
+<tr><td><code>-wx</code></td><td>X position of the waveform's left edge.</td></tr>
+<tr><td><code>-wy</code></td><td>Y position of the waveform's zero level. If omitted, the waveform will be vertically centered.</td></tr>
 <tr><td><code>-wblur</code></td><td>Make the waveform more visible on high resolutions. This is done by blurring the waveform and pushing the brightness up to make it thicker. This looks pretty ugly tho tbh lol lmao xd.</td></tr>
 </table>
 
